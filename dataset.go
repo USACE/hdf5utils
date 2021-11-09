@@ -2,10 +2,12 @@ package hdf5utils
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 
 	"gonum.org/v1/hdf5"
 )
@@ -311,6 +313,89 @@ func (h *HdfDataset) readVectorString(rowread bool, index int, dest interface{})
 			value.Set(reflect.Append(value, reflect.ValueOf(strings.TrimSpace(string(buffer[offset:offset+sz])))))
 		}
 	}
+}
+
+///////////////////////////////////////////////////////
+/////////////////////HDF Reader AsSync/////////////////
+
+type HdfReaderAsync struct {
+	filepath string
+	datapath string
+	options  HdfReadOptions
+	dims     []uint
+	subset   string
+}
+
+func (h *HdfReaderAsync) Close() {
+
+}
+
+func (h *HdfReaderAsync) Dims() []uint {
+	if h.options.IncrementalRead {
+		data, err := h.read(true)
+		if err != nil {
+			log.Println(err)
+		}
+		h.dims = data.Dims
+	}
+	return h.dims
+}
+
+func (h *HdfReaderAsync) Read() (*HdfData, error) {
+	data, err := h.read(false)
+	if err != nil {
+		return nil, err
+	}
+	h.dims = data.Dims
+	return data, nil
+}
+
+func (h *HdfReaderAsync) ReadInto(dest interface{}) error {
+	return errors.New("Not implemented yet")
+}
+
+func (h *HdfReaderAsync) ReadSubset(rowrange []int, colrange []int) (*HdfData, error) {
+	h.subset = fmt.Sprintf("%d,%d,%d,%d", rowrange[0], rowrange[1], colrange[0], colrange[1])
+	data, err := h.read(false)
+	if err != nil {
+		return nil, err
+	}
+	h.dims = data.Dims
+	return data, nil
+
+}
+
+func (h *HdfReaderAsync) ReadSubsetInto(dest interface{}, rowrange []int, colrange []int) error {
+	return errors.New("Not implemented yet")
+}
+
+func (h *HdfReaderAsync) read(dimsOnly bool) (*HdfData, error) {
+	var wg sync.WaitGroup
+	var pipes []string
+
+	pipe, err := GetPipe()
+	if err != nil {
+		return nil, err
+	}
+	pipes = append(pipes, pipe)
+	wg.Add(1)
+	ai := AsyncInput{
+		Filepath:  h.filepath,
+		Datapath:  h.datapath,
+		Namedpipe: pipe,
+		Vars: map[string]string{
+			"HDFOPTSTRSIZES": h.options.Strsizes.ToString(),
+			"HDFOPTTYPE":     strconv.Itoa(int(h.options.Dtype)),
+			"HDFSUBSET":      h.subset,
+			"HDFDIMSONLY":    strconv.FormatBool(dimsOnly),
+		},
+	}
+	var data HdfData
+	go RunAsync("DSET", ai, &data, &wg) //@TODO what if async command return error????
+
+	wg.Wait()
+	ClosePipes(pipes)
+	return &data, nil
 }
 
 ///////////////////////////////////////////////////////
