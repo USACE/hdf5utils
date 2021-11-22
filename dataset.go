@@ -102,6 +102,8 @@ type HdfReadOptions struct {
 	IncrementalReadDir int //0 by row, 1 by column
 	IncrementSize      int
 	ReadOnCreate       bool //reads data in when the new datraset is created
+	Filepath           string
+	File               *hdf5.File
 	//Async              bool
 }
 
@@ -126,13 +128,13 @@ type HdfDataset struct {
 	increment readincrement
 }
 
-func NewHdfDataset(filepath string, datapath string, options HdfReadOptions) (*HdfDataset, error) {
+func NewHdfDataset(datapath string, options HdfReadOptions) (*HdfDataset, error) {
 	var data *HdfData
 	var err error
 	var ri readincrement = readincrement{0, -1}
 	var reader HdfReader
 
-	reader, err = NewHdfReaderSync(filepath, datapath, options)
+	reader, err = NewHdfReaderSync(datapath, options)
 	if err != nil {
 		return nil, err
 	}
@@ -230,6 +232,7 @@ func (h *HdfDataset) readIncrementRow(r int, dest interface{}) error {
 		if rowend+1 >= int(h.dsetdims[0]) {
 			rowend = int(h.dsetdims[0]) - 1
 		}
+		//log.Printf("Reading Rows %d-%d  Columns %d-%d\n", r, rowend, 0, int(h.dsetdims[1])-1)
 		data, err := h.Reader.ReadSubset([]int{r, rowend}, []int{0, int(h.dsetdims[1]) - 1})
 		if err != nil {
 			return err
@@ -402,18 +405,26 @@ func (h *HdfReaderAsync) read(dimsOnly bool) (*HdfData, error) {
 /////////////////////HDF Reader Sync//////////////////////
 
 type HdfReaderSync struct {
-	file     *hdf5.File
-	dset     *hdf5.Dataset
-	dtype    reflect.Kind
-	dims     []uint //dimension of the source dataset
-	strsizes HdfStrSet
+	file       *hdf5.File
+	dset       *hdf5.Dataset
+	dtype      reflect.Kind
+	dims       []uint //dimension of the source dataset
+	strsizes   HdfStrSet
+	fileCloser bool
 }
 
-func NewHdfReaderSync(filepath string, datapath string, options HdfReadOptions) (HdfReader, error) {
-	f, err := OpenFileFromEnv(filepath)
-	if err != nil {
-		log.Fatal(err)
+func NewHdfReaderSync(datapath string, options HdfReadOptions) (HdfReader, error) {
+	var err error
+	fileCloser := false
+	f := options.File
+	if f == nil {
+		f, err = OpenFileFromEnv(options.Filepath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fileCloser = true
 	}
+
 	dset, err := f.OpenDataset(datapath)
 	if err != nil {
 		return nil, err
@@ -427,17 +438,20 @@ func NewHdfReaderSync(filepath string, datapath string, options HdfReadOptions) 
 	}
 
 	return &HdfReaderSync{
-		file:     f,
-		dset:     dset,
-		dims:     dims,
-		dtype:    options.Dtype,
-		strsizes: options.Strsizes,
+		file:       f,
+		dset:       dset,
+		dims:       dims,
+		dtype:      options.Dtype,
+		strsizes:   options.Strsizes,
+		fileCloser: fileCloser,
 	}, nil
 }
 
 func (h *HdfReaderSync) Close() {
 	defer h.dset.Close()
-	defer h.file.Close()
+	if h.fileCloser {
+		defer h.file.Close()
+	}
 }
 
 func (h *HdfReaderSync) Dims() []uint {

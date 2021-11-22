@@ -133,7 +133,7 @@ func AsyncHdfRead(url string, namedpipe string, datapath string) {
 
 	//options.ReadOnCreate = true
 
-	data, err := NewHdfDataset(url, datapath, options)
+	data, err := NewHdfDataset(datapath, options)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 	}
