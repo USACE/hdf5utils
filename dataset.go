@@ -425,6 +425,12 @@ func NewHdfReaderSync(datapath string, options HdfReadOptions) (HdfReader, error
 		fileCloser = true
 	}
 
+	//a := f.LinkExists(datapath)
+	//fmt.Println(a)
+	//if !f.LinkExists(datapath) {
+	//	return nil, errors.New(fmt.Sprintf("Data path: '%s' not found in dataset\n", datapath))
+	//}
+
 	dset, err := f.OpenDataset(datapath)
 	if err != nil {
 		return nil, err
