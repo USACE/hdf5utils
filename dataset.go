@@ -4,21 +4,65 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 
-	"gonum.org/v1/hdf5"
+	hdf5 "github.com/usace/go-hdf5"
 )
 
-func OpenFileFromEnv(url string) (*hdf5.File, error) {
+const (
+	DEFAULT_ACCESS_KEY = "AWS_ACCESS_KEY_ID"
+	DEFAULT_SECRET_KEY = "AWS_SECRET_ACCESS_KEY"
+	DEFAULT_REGION     = "AWS_DEFAULT_REGION"
+)
+
+func OpenFile(url ...string) (*hdf5.File, error) {
+	switch len(url) {
+	case 1:
+		return openFileWithPrefix(url[0], "")
+	case 2:
+		return openFileWithPrefix(url[0], url[1])
+	default:
+		return nil, errors.New("invalid HDF url")
+	}
+}
+
+func openFileWithPrefix(url string, profile string) (*hdf5.File, error) {
 	var f *hdf5.File
 	var err error
 
-	f, err = hdf5.OpenFile(url, hdf5.F_ACC_RDONLY)
+	if strings.HasPrefix(url, "https") {
 
+		fapl_id, _ := hdf5.NewPropList(hdf5.P_FILE_ACCESS)
+		region := os.Getenv(keyname(DEFAULT_REGION, profile))
+
+		ros3_fa := hdf5.H5FD_ROS3_FAPL{
+			Version:               1,
+			Authenticate:          true,
+			AWS_REGION:            region,
+			AWS_ACCESS_KEY_ID:     os.Getenv(keyname(DEFAULT_ACCESS_KEY, profile)),
+			AWS_SECRET_ACCESS_KEY: os.Getenv(keyname(DEFAULT_SECRET_KEY, profile)),
+		}
+
+		hdf5.H5PsetFaplRos3d(fapl_id, ros3_fa)
+		f, err = hdf5.OpenFileWithProp(url, hdf5.F_ACC_RDONLY, fapl_id)
+		if err != nil {
+			log.Printf("Failed opening %s at %s", url, region)
+		}
+	} else {
+		f, err = hdf5.OpenFile(url, hdf5.F_ACC_RDONLY)
+	}
 	return f, err
+}
+
+func keyname(keyname string, store string) string {
+	if store == "" {
+		return keyname
+	}
+	return fmt.Sprintf("%s_%s", store, keyname)
 }
 
 func NewHdfStrSet(sizes ...int) HdfStrSet {
@@ -418,7 +462,7 @@ func NewHdfReaderSync(datapath string, options HdfReadOptions) (HdfReader, error
 	fileCloser := false
 	f := options.File
 	if f == nil {
-		f, err = OpenFileFromEnv(options.Filepath)
+		f, err = OpenFile(options.Filepath)
 		if err != nil {
 			log.Fatal(err)
 		}

@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gonum.org/v1/hdf5"
+	hdf5 "github.com/usace/go-hdf5"
 )
 
 const stringLengthTag = "strlen"

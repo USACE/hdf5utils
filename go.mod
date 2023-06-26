@@ -4,5 +4,5 @@ go 1.15
 
 require (
 	github.com/google/uuid v1.3.0
-	gonum.org/v1/hdf5 v0.0.0-20210714002203-8c5d23bc6946
+	github.com/usace/go-hdf5 v0.0.0-20230610133040-50d751c00c4d // indirect
 )
