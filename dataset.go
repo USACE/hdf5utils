@@ -264,8 +264,7 @@ func (h *HdfDataset) ReadRow(r int, dest interface{}) error {
 			h.readVectorString(true, r, dest) //@TODO need to handle errors better here.  It looks like all of the calls will panic on error, so nothing is being returned.
 			return nil
 		} else {
-			h.readVector(true, r, dest) //@TODO need to handle errors better here.  It looks like all of the calls will panic on error, so nothing is being returned.
-			return nil
+			return h.readVector(true, r, dest)
 		}
 	}
 }
@@ -285,8 +284,7 @@ func (h *HdfDataset) readIncrementRow(r int, dest interface{}) error {
 		h.increment = readincrement{r, rowend}
 	}
 	virtualRow := r - h.increment.start
-	h.readVector(true, virtualRow, dest)
-	return nil
+	return h.readVector(true, virtualRow, dest)
 }
 
 func (h *HdfDataset) ReadColumn(c int, dest interface{}) error {
@@ -296,10 +294,8 @@ func (h *HdfDataset) ReadColumn(c int, dest interface{}) error {
 		}
 		return h.readIncrementColumn(c, dest)
 	} else {
-		h.readVector(false, c, dest) //@TODO need to handle errors better here.  It looks like all of the calls will panic on error, so nothing is being returned.
-		return nil
+		return h.readVector(false, c, dest)
 	}
-
 }
 
 func (h *HdfDataset) readIncrementColumn(c int, dest interface{}) error {
@@ -320,7 +316,21 @@ func (h *HdfDataset) readIncrementColumn(c int, dest interface{}) error {
 	return nil
 }
 
-func (h *HdfDataset) readVector(rowread bool, index int, dest interface{}) {
+func (h *HdfDataset) readVector(rowread bool, index int, dest interface{}) (err error) {
+
+	//handle panics for invalid reads or slice index errors and return an error
+	defer func() {
+		if r := recover(); r != nil {
+			readDir := "row"
+			if !rowread {
+				readDir = "column"
+			}
+			msg := fmt.Sprintf("Error reading %s at index %d: %s", readDir, index, r.(string))
+			err = errors.New(msg)
+		}
+	}()
+
+	//function start
 	colnum := h.Cols()
 	dv := reflect.ValueOf(h.Data.Buffer)
 	if dv.Kind() == reflect.Ptr {
@@ -340,6 +350,7 @@ func (h *HdfDataset) readVector(rowread bool, index int, dest interface{}) {
 			value.Set(reflect.Append(value, dv.Index(offset)))
 		}
 	}
+	return nil
 }
 
 func (h *HdfDataset) readVectorString(rowread bool, index int, dest interface{}) {
