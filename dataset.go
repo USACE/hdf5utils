@@ -261,8 +261,7 @@ func (h *HdfDataset) ReadRow(r int, dest interface{}) error {
 		return h.readIncrementRow(r, dest)
 	} else {
 		if h.options.Dtype == reflect.String {
-			h.readVectorString(true, r, dest) //@TODO need to handle errors better here.  It looks like all of the calls will panic on error, so nothing is being returned.
-			return nil
+			return h.readVectorString(true, r, dest)
 		} else {
 			return h.readVector(true, r, dest)
 		}
@@ -353,7 +352,20 @@ func (h *HdfDataset) readVector(rowread bool, index int, dest interface{}) (err 
 	return nil
 }
 
-func (h *HdfDataset) readVectorString(rowread bool, index int, dest interface{}) {
+func (h *HdfDataset) readVectorString(rowread bool, index int, dest interface{}) (err error) {
+
+	//handle panics for invalid reads or slice index errors and return an error
+	defer func() {
+		if r := recover(); r != nil {
+			readDir := "row"
+			if !rowread {
+				readDir = "column"
+			}
+			msg := fmt.Sprintf("Error reading %s at index %d: %s", readDir, index, r.(string))
+			err = errors.New(msg)
+		}
+	}()
+
 	buffer := *h.Data.Buffer.(*[]uint8)
 	value := reflect.Indirect(reflect.ValueOf(dest))
 	if rowread {
@@ -371,6 +383,7 @@ func (h *HdfDataset) readVectorString(rowread bool, index int, dest interface{})
 			value.Set(reflect.Append(value, reflect.ValueOf(strings.TrimSpace(string(buffer[offset:offset+sz])))))
 		}
 	}
+	return nil
 }
 
 ///////////////////////////////////////////////////////
