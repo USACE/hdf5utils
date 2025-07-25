@@ -108,7 +108,7 @@ func (h *HdfStrSet) RowSize() int {
 	return h.buffersize
 }
 
-//offset in bytes to the column requested
+// offset in bytes to the column requested
 func (h HdfStrSet) BytesTo(col int) (int, error) {
 	result := 0
 	if col > len(h.sizes)-1 {
@@ -503,6 +503,7 @@ func NewHdfReaderSync(datapath string, options HdfReadOptions) (HdfReader, error
 	if err != nil {
 		return nil, err
 	}
+	dset.Datatype()
 	space := dset.Space()
 	defer space.Close()
 	dims, max, err := space.SimpleExtentDims()
@@ -531,6 +532,11 @@ func (h *HdfReaderSync) Close() {
 func (h *HdfReaderSync) Dims() []uint {
 	return h.dims
 }
+
+func (h *HdfReaderSync) DatasetType() (*hdf5.Datatype, error) {
+	return h.dset.Datatype()
+}
+
 func (h *HdfReaderSync) Read() (*HdfData, error) {
 	dest, err := makeDataset(h.dims, h.dtype, h.strsizes.RowSize())
 	if err != nil {
